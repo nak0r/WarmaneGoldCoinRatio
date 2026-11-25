@@ -1,0 +1,215 @@
+// ==UserScript==
+// @name         Warmane Gold/Coins Deals Finder & Tax Breakdown
+// @namespace    Violentmonkey Scripts
+// @match        https://www.warmane.com/account/trade*
+// @grant        none
+// ==/UserScript==
+
+"use strict";
+(() => {
+    if ($('#gcr-animation-styles').length === 0) {
+        $('head').append(`<style id="gcr-animation-styles">@keyframes gcrBounce {0%, 100% { transform: translateY(0); opacity: 0.6; } 50% { transform: translateY(4px); opacity: 1; }}</style>`);
+    }
+
+    function getTradeMode() {
+        let modeDropdown = $('select, .select, [class*="dropdown"], [class*="select"]').filter(function() {
+            let txt = $(this).text().trim();
+            return txt.startsWith('Buy') || txt.startsWith('Sell');
+        }).first();
+
+        if (!modeDropdown.length) return null;
+
+        let text = modeDropdown.is('select')
+            ? modeDropdown.find('option:selected').text().trim()
+            : modeDropdown.text().trim();
+
+        return {
+            mode: text.startsWith('Sell') ? 'Sell' : 'Buy',
+            element: modeDropdown
+        };
+    }
+
+    function ensureButtonExists() {
+        let tradeInfo = getTradeMode();
+        if (!tradeInfo) return;
+
+        let currentMode = tradeInfo.mode;
+        let existingBtn = $('#gcr-find-button');
+
+        if (existingBtn.length > 0) {
+            if (existingBtn.attr('data-mode') === currentMode) return;
+            existingBtn.remove();
+            $('#gcr-top-deals-container').remove();
+            $('#gcr-tax-container').remove();
+        }
+
+        let isSell = currentMode === 'Sell';
+        let btnText = isSell ? '[Coin Tax]' : '[Top 9 Gold Deals]';
+        let btnColor = isSell ? '#e67e22' : '#3498db';
+        let btnBg = isSell ? 'rgba(230, 126, 34, 0.08)' : 'rgba(52, 152, 219, 0.08)';
+
+        let actionButton = $(`<a href="#" id="gcr-find-button" data-mode="${currentMode}" style="display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; height: 28px; margin-left: 26px; margin-right: 4px; color: ${btnColor}; font-family: system-ui, sans-serif; font-size: 13px; font-weight: bold; text-decoration: none; border: 1px solid ${btnColor}; padding: 0 12px; border-radius: 4px; background: ${btnBg}; box-sizing: border-box;">${btnText}</a>`);
+
+        let toolbarItem = tradeInfo.element.closest('div, li, span, td');
+        while (toolbarItem.parent().length && toolbarItem.parent().children().length <= 1) {
+            toolbarItem = toolbarItem.parent();
+        }
+
+        if (toolbarItem.length) {
+            actionButton.insertAfter(toolbarItem);
+        } else {
+            let target = document.querySelector('#wmstore');
+            if (target) {
+                actionButton.css({ float: 'right', marginBottom: '8px' });
+                actionButton.insertBefore(target);
+            }
+        }
+
+        actionButton.on('click', (e) => {
+            e.preventDefault();
+            if (isSell) {
+                toggleTaxBreakdown();
+            } else {
+                processDeals();
+            }
+        });
+    }
+
+    function toggleTaxBreakdown() {
+        if ($('#gcr-tax-container').length > 0) {
+            $('#gcr-tax-container').remove();
+            return;
+        }
+
+        $('#gcr-top-deals-container').remove();
+
+        let taxBrackets = [
+            { range: "1 - 14 Coins", tax: "1 Coin", net: "0 - 13 Coins" },
+            { range: "15 - 24 Coins", tax: "2 Coins", net: "13 - 22 Coins" },
+            { range: "25 - 34 Coins", tax: "3 Coins", net: "22 - 31 Coins" },
+            { range: "35 - 44 Coins", tax: "4 Coins", net: "31 - 40 Coins" },
+            { range: "45 - 54 Coins", tax: "5 Coins", net: "40 - 49 Coins" }
+        ];
+
+        let rowsHtml = taxBrackets.map(b => `
+            <tr style="border-bottom: 1px solid #2e2e38;">
+                <td style="padding: 8px 12px; color: #ffffff; font-weight: bold;">${b.range}</td>
+                <td style="padding: 8px 12px; color: #ff6b6b; font-weight: bold;">${b.tax}</td>
+                <td style="padding: 8px 12px; color: #2ecc71;">${b.net}</td>
+            </tr>
+        `).join("");
+
+        let container = $(`
+            <div id="gcr-tax-container" style="background: #1e1e24; border: 1px solid #4a4a5a; border-radius: 4px; padding: 14px; margin: 10px 0; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 10px;">
+                    <span style="color: #e67e22; font-weight: bold; font-size: 14px;">💰 Warmane Trade Coin Tax Breakdown</span>
+                    <a href="#" id="gcr-close-tax" style="color: #a0a0a0; text-decoration: none; font-size: 12px; border: 1px solid #4a4a5a; padding: 2px 8px; border-radius: 3px;">✕ Close</a>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #4a4a5a; color: #a0a0a0; font-size: 12px;">
+                            <th style="padding: 6px 12px;">Selling Price</th>
+                            <th style="padding: 6px 12px;">Warmane Tax</th>
+                            <th style="padding: 6px 12px;">You Receive</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        `);
+
+        container.insertBefore("#wmstore");
+        $('#gcr-close-tax').on('click', (e) => {
+            e.preventDefault();
+            $('#gcr-tax-container').remove();
+        });
+    }
+
+    function processDeals() {
+        $('#gcr-top-deals-container').remove();
+        $('#gcr-tax-container').remove();
+        let dealGroups = {};
+
+        $('#data-table tbody tr:visible').each(function() {
+            let row = $(this);
+            let rowHtml = row.html();
+            let goldMatch = rowHtml.match(/<span class="numeric">([\d,]+)<\/span>\s*gold/i);
+            let coinsMatch = rowHtml.match(/costValues"[^>]*data-order="(\d+)"/i);
+
+            if (goldMatch && coinsMatch) {
+                let goldText = goldMatch[1];
+                let goldVal = parseInt(goldText.replace(/,/g, ''), 10);
+                let coinsVal = parseInt(coinsMatch[1], 10);
+                let groupKey = `${goldVal}-${coinsVal}`;
+                let factionCell = row.find('.factionEmblem').closest('td');
+                let seller = factionCell.length ? factionCell.prev().text().trim() : "Unknown";
+
+                if (!dealGroups[groupKey]) {
+                    dealGroups[groupKey] = { gold: goldText, coins: coinsVal, ratio: Math.round(goldVal / coinsVal), sellers: {} };
+                }
+                dealGroups[groupKey].sellers[seller] = (dealGroups[groupKey].sellers[seller] || 0) + 1;
+            }
+        });
+
+        let sortedDeals = Object.values(dealGroups).sort((a, b) => b.ratio - a.ratio).slice(0, 9);
+        let badges = ["🥇", "🥈", "🥉"];
+
+        let container = $(`
+            <div id="gcr-top-deals-container" style="background: #1e1e24; border: 1px solid #4a4a5a; border-radius: 4px; padding: 14px; margin: 10px 0; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 10px;">
+                    <span style="color: #3498db; font-weight: bold; font-size: 14px;">🏆 Top 9 Gold Deals</span>
+                    <a href="#" id="gcr-close-deals" style="color: #a0a0a0; text-decoration: none; font-size: 12px; border: 1px solid #4a4a5a; padding: 2px 8px; border-radius: 3px;">✕ Close</a>
+                </div>
+                <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box; align-items: stretch;">
+                    <div id="gcr-warning-sidebar" style="flex: 0 0 180px; background: #241919; border: 1px solid #722c2c; border-radius: 4px; padding: 12px; box-sizing: border-box; color: #ff9f9f; font-size: 13px; line-height: 1.4; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="font-weight: bold; font-size: 14px; color: #ff6b6b; margin-bottom: 8px;">⚠️ Accuracy Notice</div>
+                            To ensure these results are accurate, make sure you clicked the <strong style="color: #ffffff;">"Gold"</strong> tab.
+                        </div>
+                        <div style="text-align: center; font-size: 24px; color: #ff6b6b; margin-top: 10px; line-height: 1; animation: gcrBounce 2s infinite ease-in-out;">↓ ↓ ↓</div>
+                    </div>
+                    <div id="gcr-cards-grid" style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;"></div>
+                </div>
+            </div>
+        `);
+
+        let grid = container.find('#gcr-cards-grid');
+        sortedDeals.forEach((deal, index) => {
+            let rankLabel = index < 3 ? badges[index] + " Rank " + (index + 1) : "🏅 Rank " + (index + 1);
+            let titleColor = index < 3 ? "#f1c40f" : "#e67e22";
+            let sellers = Object.entries(deal.sellers).map(([name, count]) => count > 1 ? `${name} (${count})` : name).join(", ");
+
+            grid.append(`
+                <div style="background: #18181d; border: 1px solid #4a4a5a; border-radius: 4px; padding: 12px; display: flex; flex-direction: column;">
+                    <div style="color: ${titleColor}; font-weight: bold; font-size: 12px; margin-bottom: 6px; border-bottom: 1px solid #333; padding-bottom: 4px;">${rankLabel}</div>
+                    <div style="color: #a0a0a0; font-size: 11px; margin-bottom: 4px;">Seller: <strong style="color: #fff;">${sellers}</strong></div>
+                    <div>
+                        <span style="color: #a0a0a0; font-size: 11px;">Gold:</span> <strong style="color: #f39c12; font-size: 12px;">${deal.gold}</strong><br>
+                        <span style="color: #a0a0a0; font-size: 11px;">Cost:</span> <strong style="color: #3498db; font-size: 12px;">${deal.coins} Coins</strong><br>
+                        <span style="color: #e67e22; font-weight: bold; font-size: 13px;">${deal.ratio} G : 1 C</span>
+                    </div>
+                </div>
+            `);
+        });
+
+        container.insertBefore("#wmstore");
+        $('#gcr-close-deals').on('click', (e) => {
+            e.preventDefault();
+            $('#gcr-top-deals-container').remove();
+        });
+    }
+
+    const observer = new MutationObserver(() => {
+        if ($('#data-table').is(':visible') || getTradeMode()) {
+            ensureButtonExists();
+        } else {
+            $('#gcr-find-button').remove();
+            $('#gcr-top-deals-container').remove();
+            $('#gcr-tax-container').remove();
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
+
