@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name         Warmane Gold/Coins Deals Finder & Tax Breakdown
 // @namespace    Violentmonkey Scripts
+// @version      2.0
 // @match        https://www.warmane.com/account/trade*
 // @grant        none
 // ==/UserScript==
@@ -75,6 +76,12 @@
         });
     }
 
+    // Warmane coin tax: 1 coin minimum, otherwise price / 10 rounded to nearest
+    // (1-14 -> 1, 15-24 -> 2, 25-34 -> 3, 35-44 -> 4, 45-54 -> 5, ...)
+    function calcCoinTax(price) {
+        return Math.max(1, Math.floor((price + 5) / 10));
+    }
+
     function toggleTaxBreakdown() {
         if ($('#gcr-tax-container').length > 0) {
             $('#gcr-tax-container').remove();
@@ -83,40 +90,48 @@
 
         $('#gcr-top-deals-container').remove();
 
-        let taxBrackets = [
-            { range: "1 - 14 Coins", tax: "1 Coin", net: "0 - 13 Coins" },
-            { range: "15 - 24 Coins", tax: "2 Coins", net: "13 - 22 Coins" },
-            { range: "25 - 34 Coins", tax: "3 Coins", net: "22 - 31 Coins" },
-            { range: "35 - 44 Coins", tax: "4 Coins", net: "31 - 40 Coins" },
-            { range: "45 - 54 Coins", tax: "5 Coins", net: "40 - 49 Coins" }
-        ];
+        const MIN_PRICE = 2;   // 1 coin -> 1 tax -> 0 net, not useful
+        const MAX_PRICE = 100;
+        const COLUMNS = 9;
 
-        let rowsHtml = taxBrackets.map(b => `
-            <tr style="border-bottom: 1px solid #2e2e38;">
-                <td style="padding: 8px 12px; color: #ffffff; font-weight: bold;">${b.range}</td>
-                <td style="padding: 8px 12px; color: #ff6b6b; font-weight: bold;">${b.tax}</td>
-                <td style="padding: 8px 12px; color: #2ecc71;">${b.net}</td>
-            </tr>
-        `).join("");
+        let rows = [];
+        for (let price = MIN_PRICE; price <= MAX_PRICE; price++) {
+            let tax = calcCoinTax(price);
+            rows.push({ price, tax, net: price - tax });
+        }
+        const perColumn = Math.ceil(rows.length / COLUMNS);
+
+        let tableHeader = `
+            <thead>
+                <tr style="border-bottom: 1px solid #4a4a5a; color: #a0a0a0; font-size: 10px;">
+                    <th style="padding: 1px 5px;">Price</th>
+                    <th style="padding: 1px 5px;">Tax</th>
+                    <th style="padding: 1px 5px;">Net</th>
+                </tr>
+            </thead>`;
+
+        let tablesHtml = "";
+        for (let c = 0; c < COLUMNS; c++) {
+            let chunk = rows.slice(c * perColumn, (c + 1) * perColumn);
+            if (!chunk.length) break;
+
+            let chunkRows = chunk.map((r) => {
+                // Brighter divider where the tax tier steps up
+                let tierStart = r.price > MIN_PRICE && calcCoinTax(r.price - 1) !== r.tax;
+                let border = tierStart ? "border-top: 1px solid #7a7a8a;" : "border-top: 1px solid #2a2a32;";
+                return `<tr style="${border}"><td style="padding: 1px 5px; color: #fff; font-weight: bold;">${r.price}</td><td style="padding: 1px 5px; color: #ff6b6b; font-weight: bold;">${r.tax}</td><td style="padding: 1px 5px; color: #2ecc71;">${r.net}</td></tr>`;
+            }).join("");
+
+            tablesHtml += `<table style="flex: 1; border-collapse: collapse; font-size: 11px; line-height: 1.2; text-align: left; align-self: flex-start;">${tableHeader}<tbody>${chunkRows}</tbody></table>`;
+        }
 
         let container = $(`
-            <div id="gcr-tax-container" style="background: #1e1e24; border: 1px solid #4a4a5a; border-radius: 4px; padding: 14px; margin: 10px 0; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 10px;">
-                    <span style="color: #e67e22; font-weight: bold; font-size: 14px;">💰 Warmane Trade Coin Tax Breakdown</span>
-                    <a href="#" id="gcr-close-tax" style="color: #a0a0a0; text-decoration: none; font-size: 12px; border: 1px solid #4a4a5a; padding: 2px 8px; border-radius: 3px;">✕ Close</a>
+            <div id="gcr-tax-container" style="background: #1e1e24; border: 1px solid #4a4a5a; border-radius: 4px; padding: 8px 10px; margin: 6px 0; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 6px;">
+                    <span style="color: #e67e22; font-weight: bold; font-size: 13px;">💰 Coin Tax <span style="color: #a0a0a0; font-weight: normal; font-size: 10px;">(Coins)</span></span>
+                    <a href="#" id="gcr-close-tax" style="color: #a0a0a0; text-decoration: none; font-size: 11px; border: 1px solid #4a4a5a; padding: 0 6px; border-radius: 3px;">✕</a>
                 </div>
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid #4a4a5a; color: #a0a0a0; font-size: 12px;">
-                            <th style="padding: 6px 12px;">Selling Price</th>
-                            <th style="padding: 6px 12px;">Warmane Tax</th>
-                            <th style="padding: 6px 12px;">You Receive</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml}
-                    </tbody>
-                </table>
+                <div style="display: flex; gap: 12px; width: 100%; box-sizing: border-box;">${tablesHtml}</div>
             </div>
         `);
 
@@ -212,4 +227,3 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 })();
-
