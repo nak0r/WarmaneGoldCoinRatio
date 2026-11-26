@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Warmane Gold/Coins Deals Finder & Tax Breakdown
 // @namespace    Violentmonkey Scripts
-// @version      2.0
+// @version      2.3
 // @match        https://www.warmane.com/account/trade*
 // @grant        none
 // ==/UserScript==
@@ -11,6 +11,9 @@
     if ($('#gcr-animation-styles').length === 0) {
         $('head').append(`<style id="gcr-animation-styles">@keyframes gcrBounce {0%, 100% { transform: translateY(0); opacity: 0.6; } 50% { transform: translateY(4px); opacity: 1; }}</style>`);
     }
+
+    // Latest Top 9 results, shared with the Coin Tax window
+    let lastDeals = null;
 
     function getTradeMode() {
         let modeDropdown = $('select, .select, [class*="dropdown"], [class*="select"]').filter(function() {
@@ -103,7 +106,7 @@
 
         let tableHeader = `
             <thead>
-                <tr style="border-bottom: 1px solid #4a4a5a; color: #a0a0a0; font-size: 10px;">
+                <tr style="border-bottom: 1px solid #4a4a5a; color: #a0a0a0; font-size: 12px;">
                     <th style="padding: 1px 5px;">Price</th>
                     <th style="padding: 1px 5px;">Tax</th>
                     <th style="padding: 1px 5px;">Net</th>
@@ -122,27 +125,105 @@
                 return `<tr style="${border}"><td style="padding: 1px 5px; color: #fff; font-weight: bold;">${r.price}</td><td style="padding: 1px 5px; color: #ff6b6b; font-weight: bold;">${r.tax}</td><td style="padding: 1px 5px; color: #2ecc71;">${r.net}</td></tr>`;
             }).join("");
 
-            tablesHtml += `<table style="flex: 1; border-collapse: collapse; font-size: 11px; line-height: 1.2; text-align: left; align-self: flex-start;">${tableHeader}<tbody>${chunkRows}</tbody></table>`;
+            tablesHtml += `<table style="flex: 1; border-collapse: collapse; font-size: 13px; line-height: 1.2; text-align: left; align-self: flex-start;">${tableHeader}<tbody>${chunkRows}</tbody></table>`;
+        }
+
+        let rank1 = (lastDeals && lastDeals.length) ? lastDeals[0] : null;
+        let fmt = (n) => Math.round(n).toLocaleString();
+        let esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+        // Example sales built from the Rank 1 deal found by [Top 9 Gold Deals]
+        let examplesHtml;
+        if (rank1) {
+            let exactRatio = rank1.goldNum / rank1.coins;
+            examplesHtml = `
+                <div style="color: #f1c40f; font-weight: bold; font-size: 13px; margin-bottom: 3px;">🥇 Example sale at Rank 1 rate
+                    <span style="color: #a0a0a0; font-weight: normal;">— ${esc(rank1.gold)} gold for ${fmt(rank1.coins)} coins (${fmt(exactRatio)} G : 1 C), seller: ${esc(Object.keys(rank1.sellers).join(", "))}</span>
+                </div>
+                <label style="color: #a0a0a0; font-size: 13px;">Your gold amount
+                    <input id="gcr-sale-input" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 50,000 or 50k" value="${rank1.goldNum}" style="width: 110px; margin-left: 6px; padding: 1px 4px; background: #101014; color: #fff; border: 1px solid #4a4a5a; border-radius: 3px; font-size: 14px;">
+                </label>
+                <div id="gcr-sale-out" style="margin-top: 5px; font-size: 14px;"></div>`;
+        } else {
+            examplesHtml = `
+                <div style="color: #f1c40f; font-weight: bold; font-size: 13px; margin-bottom: 3px;">🥇 Example sales at Rank 1 rate</div>
+                <div style="color: #a0a0a0; font-size: 13px;">No Rank 1 data yet. Switch to Buy mode, click <strong style="color: #3498db;">[Top 9 Gold Deals]</strong>, then come back here.</div>`;
         }
 
         let container = $(`
             <div id="gcr-tax-container" style="background: #1e1e24; border: 1px solid #4a4a5a; border-radius: 4px; padding: 8px 10px; margin: 6px 0; width: 100%; box-sizing: border-box; font-family: system-ui, sans-serif;">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 6px;">
-                    <span style="color: #e67e22; font-weight: bold; font-size: 13px;">💰 Coin Tax <span style="color: #a0a0a0; font-weight: normal; font-size: 10px;">(Coins)</span></span>
-                    <a href="#" id="gcr-close-tax" style="color: #a0a0a0; text-decoration: none; font-size: 11px; border: 1px solid #4a4a5a; padding: 0 6px; border-radius: 3px;">✕</a>
+                    <span style="color: #e67e22; font-weight: bold; font-size: 15px;">💰 Coin Tax <span style="color: #a0a0a0; font-weight: normal; font-size: 12px;">(Coins)</span></span>
+                    <a href="#" id="gcr-close-tax" style="color: #a0a0a0; text-decoration: none; font-size: 13px; border: 1px solid #4a4a5a; padding: 0 6px; border-radius: 3px;">✕</a>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: stretch;">
+                    <div style="flex: 1; min-width: 320px; background: #18181d; border: 1px solid #4a4a5a; border-radius: 4px; padding: 6px 8px; box-sizing: border-box;">
+                        ${examplesHtml}
+                    </div>
                 </div>
                 <div style="display: flex; gap: 12px; width: 100%; box-sizing: border-box;">${tablesHtml}</div>
             </div>
         `);
 
         container.insertBefore("#wmstore");
+
+        if (rank1) {
+            let exactRatio = rank1.goldNum / rank1.coins;
+            // Accepts 50000, 50,000, 50k, 1.5m
+            let parseGold = (raw) => {
+                let m = raw.toLowerCase().replace(/[,\s]/g, '').match(/^(\d+(?:\.\d+)?)([km]?)$/);
+                if (!m) return NaN;
+                let mult = m[2] === 'k' ? 1e3 : (m[2] === 'm' ? 1e6 : 1);
+                return Math.floor(parseFloat(m[1]) * mult);
+            };
+            let renderSale = () => {
+                let out = $('#gcr-sale-out');
+                let raw = $('#gcr-sale-input').val().trim();
+                if (raw === '') {
+                    out.css('color', '#a0a0a0').text('Enter an amount of gold to see an example sale.');
+                    return;
+                }
+                let gold = parseGold(raw);
+                if (!isFinite(gold) || gold < 1) {
+                    out.css('color', '#ff9f9f').text('Enter a whole amount of gold, e.g. 50000, 50,000 or 50k.');
+                    return;
+                }
+                let price = Math.round(gold / exactRatio);
+                if (price < 1) {
+                    out.css('color', '#ff9f9f').text('That is less than 1 coin at the Rank 1 rate.');
+                    return;
+                }
+                let tax = calcCoinTax(price);
+                let net = price - tax;
+                let eff = net > 0 ? fmt(gold / net) : '—';
+                let cell = 'padding: 1px 8px 1px 0;';
+                out.css('color', '#fff').html(`
+                    <table style="border-collapse: collapse; font-size: 13px; line-height: 1.3; text-align: left;">
+                        <thead><tr style="color: #a0a0a0; font-size: 12px; border-bottom: 1px solid #4a4a5a;">
+                            <th style="${cell}">Gold</th><th style="${cell}">Price (C)</th><th style="${cell}">Tax</th><th style="${cell}">Net (C)</th><th style="${cell}">After-tax G:C</th>
+                        </tr></thead>
+                        <tbody><tr>
+                            <td style="${cell} color: #f39c12;">${fmt(gold)}</td>
+                            <td style="${cell} color: #3498db;">${fmt(price)}</td>
+                            <td style="${cell} color: #ff6b6b; font-weight: bold;">${fmt(tax)}</td>
+                            <td style="${cell} color: #2ecc71;">${fmt(net)}</td>
+                            <td style="${cell} color: #e67e22; font-weight: bold;">${eff}</td>
+                        </tr></tbody>
+                    </table>
+                    <div style="color: #a0a0a0; font-size: 12px; margin-top: 2px;">Price = gold ÷ Rank 1 ratio, rounded to the nearest whole coin.</div>`);
+            };
+            $('#gcr-sale-input').on('input', renderSale);
+            renderSale();
+        }
+
         $('#gcr-close-tax').on('click', (e) => {
             e.preventDefault();
             $('#gcr-tax-container').remove();
         });
     }
 
-    function processDeals() {
+
+function processDeals() {
         $('#gcr-top-deals-container').remove();
         $('#gcr-tax-container').remove();
         let dealGroups = {};
@@ -162,13 +243,14 @@
                 let seller = factionCell.length ? factionCell.prev().text().trim() : "Unknown";
 
                 if (!dealGroups[groupKey]) {
-                    dealGroups[groupKey] = { gold: goldText, coins: coinsVal, ratio: Math.round(goldVal / coinsVal), sellers: {} };
+                    dealGroups[groupKey] = { gold: goldText, goldNum: goldVal, coins: coinsVal, ratio: Math.round(goldVal / coinsVal), sellers: {} };
                 }
                 dealGroups[groupKey].sellers[seller] = (dealGroups[groupKey].sellers[seller] || 0) + 1;
             }
         });
 
         let sortedDeals = Object.values(dealGroups).sort((a, b) => b.ratio - a.ratio).slice(0, 9);
+        lastDeals = sortedDeals;
         let badges = ["🥇", "🥈", "🥉"];
 
         let container = $(`
