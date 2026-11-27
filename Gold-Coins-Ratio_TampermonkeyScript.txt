@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Warmane Gold/Coins Deals Finder & Tax Breakdown
 // @namespace    Violentmonkey Scripts
-// @version      2.3
+// @version      2.4
 // @match        https://www.warmane.com/account/trade*
 // @grant        none
 // ==/UserScript==
@@ -161,11 +161,23 @@
                         ${examplesHtml}
                     </div>
                 </div>
-                <div style="display: flex; gap: 12px; width: 100%; box-sizing: border-box;">${tablesHtml}</div>
+                <a href="#" id="gcr-table-toggle" style="display: block; color: #a0a0a0; text-decoration: none; font-size: 13px; padding: 2px 0;"><span id="gcr-table-arrow">▸</span> Tax table <span style="font-size: 12px;">(${MIN_PRICE}–${MAX_PRICE} coins)</span></a>
+                <div id="gcr-table-wrap" style="display: none; margin-top: 6px;">
+                    <div style="display: flex; gap: 12px; width: 100%; box-sizing: border-box;">${tablesHtml}</div>
+                </div>
             </div>
         `);
 
         container.insertBefore("#wmstore");
+
+        // Tax table is collapsed by default
+        $('#gcr-table-toggle').on('click', (e) => {
+            e.preventDefault();
+            let wrap = $('#gcr-table-wrap');
+            let open = wrap.is(':hidden');
+            wrap.toggle(open);
+            $('#gcr-table-arrow').text(open ? '▾' : '▸');
+        });
 
         if (rank1) {
             let exactRatio = rank1.goldNum / rank1.coins;
@@ -195,22 +207,19 @@
                 }
                 let tax = calcCoinTax(price);
                 let net = price - tax;
-                let eff = net > 0 ? fmt(gold / net) : '—';
                 let cell = 'padding: 1px 8px 1px 0;';
                 out.css('color', '#fff').html(`
                     <table style="border-collapse: collapse; font-size: 13px; line-height: 1.3; text-align: left;">
                         <thead><tr style="color: #a0a0a0; font-size: 12px; border-bottom: 1px solid #4a4a5a;">
-                            <th style="${cell}">Gold</th><th style="${cell}">Price (C)</th><th style="${cell}">Tax</th><th style="${cell}">Net (C)</th><th style="${cell}">After-tax G:C</th>
+                            <th style="${cell}">Gold</th><th style="${cell}">Price (C)</th><th style="${cell}">Tax</th><th style="${cell}">Net (C)</th>
                         </tr></thead>
                         <tbody><tr>
                             <td style="${cell} color: #f39c12;">${fmt(gold)}</td>
                             <td style="${cell} color: #3498db;">${fmt(price)}</td>
                             <td style="${cell} color: #ff6b6b; font-weight: bold;">${fmt(tax)}</td>
                             <td style="${cell} color: #2ecc71;">${fmt(net)}</td>
-                            <td style="${cell} color: #e67e22; font-weight: bold;">${eff}</td>
                         </tr></tbody>
-                    </table>
-                    <div style="color: #a0a0a0; font-size: 12px; margin-top: 2px;">Price = gold ÷ Rank 1 ratio, rounded to the nearest whole coin.</div>`);
+                    </table>`);
             };
             $('#gcr-sale-input').on('input', renderSale);
             renderSale();
