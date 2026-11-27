@@ -17,9 +17,9 @@ The script adds one button to the trade page toolbar. Which button you see depen
 ### Sell mode: Coin Tax
 Click **[Coin Tax]** to open the coin tax window.
 
-- **Per-price tax table:** every selling price from 2 to 100 coins is listed individually with the tax and the net coins you receive, instead of broad ranges. A brighter divider marks the price where the tax steps up.
-- **Example sale at the Rank 1 rate:** enter your own gold amount (for example `50000`, `50,000`, `50k` or `1.5m`) and the window shows the price in coins, the tax, the net coins and the after-tax G : C ratio, based on the Rank 1 deal from the Top 9 list.
-  - The price is your gold divided by the Rank 1 ratio, rounded to the nearest whole coin.
+- **Per-price tax table:** every selling price from 2 to 100 coins is listed individually with the tax and the net coins you receive, instead of broad ranges. A brighter divider marks the price where the tax steps up. The table is collapsed by default; click **Tax table** to expand or collapse it.
+- **Example sale at the Rank 1 rate:** enter your own gold amount (for example `50000`, `50,000`, `50k` or `1.5m`) and the window shows the price in coins, the tax and the net coins, based on the Rank 1 deal from the Top 9 list.
+  - The price is your gold divided by the Rank 1 ratio, rounded to the nearest whole coin. This is no longer explained in the window itself. If your gold works out to less than 1 coin, the window shows a short message instead of a result.
   - The Rank 1 data comes from the last time you clicked **[Top 9 Gold Deals]**. Run it in Buy mode first, then switch to Sell mode and open Coin Tax. If there is no data yet, the window tells you so. The data is kept until you reload the page.
 
 ### How the tax is calculated
@@ -48,4 +48,4 @@ Near the top of the coin tax function in the script you can adjust:
 - `COLUMNS`: how many columns the table is split into (default 9). Use fewer columns for a narrower, taller window.
 
 ## Version
-Current version: 2.3
+Current version: 2.4
